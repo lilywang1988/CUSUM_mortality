@@ -19,6 +19,7 @@ NumericVector O_E_CUSUM_hval(int nloop,int yr_size,NumericVector theta1, Numeric
   IntegerVector time_list=seq_len(ndays-start_day+1);
   time_list.push_front(0);
   for(int loop=1;loop<=nloop; loop++){
+    Rcout<<loop<<std::endl;
     srand (loop);
     NumericVector enrl_gp=rexp(size*2, yr_size);
     NumericVector enrl_t=cumsum(enrl_gp);
@@ -114,6 +115,7 @@ List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size
   NumericMatrix hit_total(rho_list.length(),c1.length());
   NumericMatrix hit_count(rho_list.length(),c1.length()); 
   for(int loop=1;loop<=nloop; loop++){
+    Rcout<<loop<<std::endl;
     srand (loop);
     NumericVector enrl_gp=rexp(size*2, yr_size);
     NumericVector enrl_t=cumsum(enrl_gp);
