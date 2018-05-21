@@ -326,7 +326,9 @@ CUSUM_data_gen=function(mu,yr_size,tau,yr_er,yr_int=1,start_yr=1,seed=1,beta=0){
   set.seed(seed)
   size=trunc(yr_size*tau)
   gamma_subject=-log(1-yr_er)/365
-  ndays=ceiling(tau*365)
+  ndays=trunc(tau*365)
+  start_day=trunc(start_yr*365)+1
+  time_list=0:ndays-start_day+1
   Lambda0=(0:ndays)*gamma_subject
   enrl_gp=rexp(size*2, yr_size)
   enrl_t=cumsum(enrl_gp)
@@ -355,8 +357,9 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   sign_c1=sign(c1)
   abs_c1=abs(c1)
   c1_length=length(c1)
+  rho_t=matrix(rho_t)
   if(ncol(rho_t)==1){
-    rho_t=replicate(c1_length,rho_t)
+    rho_t=matrix(replicate(c1_length,rho_t),ncol=c1_length)
   }
   ndays=trunc(tau*365)
   time_list=0:ndays-start_day+1
@@ -364,26 +367,26 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   if(rho_nrow!=ndays-start_day+2){ #warning("Warning: improper length of rho_t")
     if(rho_nrow<ndays-start_day+2)
     { 
-      rho_t[rho_nrow+1:ndays-start_day+2,]=t(replicate(ndays-start_day+2-rho_nrow,rho_t[rho_nrow,]))
+      rho_t=rbind(rho_t,t(replicate(ndays-start_day+2-rho_nrow,rho_t[rho_nrow,])))
     }
     else{
       rho_t=rho_t[1:ndays-start_day+2,]
     }
   }
-  print(rho_t)
+  #print(rho_t)
   M_t_pre=NULL
   O_t_pre=E_t_pre=matrix(0,nrow=N3,ncol=ndays-start_day+1);
   for (i in 1:N3){
     if(cho_time[i]>=start_day){
-      true_in=max(start_day:enrl_t[i]) 
+      true_in=max(start_day,enrl_t[i]) 
       for(j in 1:ndays-start_day+1){
         if(j>=cho_time[i]-start_day && delta[i]){
           O_t_pre[i,j]=1;
         }
         if(j>=cho_time[i]-start_day) {
-          E_t_pre[i,j]=Lambda0(cho_time[i]-true_in)*exp(xbeta)
+          E_t_pre[i,j]=Lambda0[cho_time[i]-true_in+1]*exp(xbeta[i])
         } else if(j>=true_in-start_day && j<=cho_time[i]-start_day){
-          E_t_pre[i,j]=Lambda0(j-(true_in-start_day))*exp(xbeta)
+          E_t_pre[i,j]=Lambda0[j-(true_in-start_day)+1]*exp(xbeta[i])
         }
       }
       
@@ -395,19 +398,19 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   O_E_t=O_t-E_t
   cross=NULL
   start_times=vector("list",c1_length)
-  M_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1.length())
-  for(k in 1:c1_length()){
+  M_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1_length)
+  for(k in 1:c1_length){
     start_times[[k]][1]=0
-    M_t_pre=sign_c1(k)*O_E_t-abs_c1(k)*E_t
+    M_t_pre=sign_c1[k]*O_E_t-abs_c1[k]*E_t
     M_t_pre=c(0,M_t_pre)
     M_min=0
     cross[k]=0
     for(t in 1:ndays-start_day+2){
-      M_min=min(M_min,M_t_pre(t));
-      M_pt1=M_min-M_t_pre[t]+h(k);
+      M_min=min(M_min,M_t_pre[t]);
+      M_pt1=M_min-M_t_pre[t]+h[k];
       
       if(restart[k]&&cross[k]>0)  {
-        M_pt2=-(M_t_pre[t]-M_t_pre[start_times[[i]][cross[k]+1]+1])+(1-rho_t[t,k])*h[k]
+        M_pt2=-(M_t_pre[t]-M_t_pre[start_times[[k]][cross[k]+1]+1])+(1-rho_t[t,k])*h[k]
         M_restart[t,k]=min(M_pt1,M_pt2)
       }else{
         M_restart[t,k]=M_pt1;
@@ -417,8 +420,9 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
       if(M_restart[t,k]<0){
 
       if(restart[k]){
-        start_times[[k]][cross[k]+1]=t-1
         cross[k]=cross[k]+1
+        start_times[[k]][cross[k]+1]=t-1
+        
       } else if(!restart[k]&&cross[k]==0){
         cross[k]=1
         start_times[[k]][2]=t-1
@@ -438,12 +442,22 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
 
 
 
-data=CUSUM_data_gen(0,100,4.5,0.1)
-result=O_E_CUSUM_calc(h,matrix(0,nrow=1,ncol=1),c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=0)
 if(F){
 
 options(max.print=1000000)
 
+  theta1=c(log(2),-log(2))
+  theta0=c(log(1),-log(1))
+  mu=log(2)
+  start_yr=1
+  yr_er=0.1
+  tau=4.5
+  h=c(6.463784009,5.602556288)
+  data=CUSUM_data_gen(mu,100,tau,yr_er)
+#either scalor, two-length vector or long tables for input of rho_t
+  result=O_E_CUSUM_calc(h,0,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=0)
+  
+  
 theta1=c(log(2),-log(2))
 theta0=c(log(1),-log(1))
 mu=log(2)
