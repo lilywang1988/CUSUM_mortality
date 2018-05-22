@@ -322,19 +322,23 @@ NumericVector Quantile(NumericVector newvalues, NumericVector oldvalues,int sN){
 
 /*** R
 #CUSUM_data_gen:generate data for O_E_calc as example
-CUSUM_data_gen=function(mu,yr_size,tau,yr_er,yr_int=1,start_yr=1,seed=1,beta=0){
+CUSUM_data_gen=function(mu,yr_size,tau,yr_er,yr_int=1,start_yr=1,seed=1,beta=0,change_yr=F,change_rate=0){
   set.seed(seed)
   size=trunc(yr_size*tau)
   gamma_subject=-log(1-yr_er)/365
   ndays=trunc(tau*365)
   start_day=trunc(start_yr*365)+1
-  time_list=0:ndays-start_day+1
+  time_list=0:(ndays-start_day+1)
   Lambda0=(0:ndays)*gamma_subject
   enrl_gp=rexp(size*2, yr_size)
   enrl_t=cumsum(enrl_gp)
   enrl_t=floor((enrl_t[enrl_t<tau])*365)
   N3=length(enrl_t)
   pre_time=trunc(rexp(N3,(gamma_subject)*exp(mu)))
+  if(change_yr!=F){
+    ind_change <- which((pre_time+enrl_t)>(change_yr*365))
+    pre_time[ind_change]<- ceiling((pre_time+enrl_t-(change_yr*365))[ind_change]*exp(mu)/exp(change_rate)+round(change_yr*365)-enrl_t[ind_change])
+  }
   delta_list=((pre_time<=365*yr_int) & ((enrl_t+pre_time)<(tau*365)))
   time=trunc(pmin(pre_time,pmin(365*yr_int,tau*365-enrl_t)));
   cho_time=enrl_t+time;
@@ -345,24 +349,25 @@ CUSUM_data_gen=function(mu,yr_size,tau,yr_er,yr_int=1,start_yr=1,seed=1,beta=0){
 }
 
 #O_E_calc: main function for the O-E CUSUM curve mornitoting; Lambda0 must start from time 0, end at least at the end of the followup day (unit:day). 
-O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,theta0,Lambda0,tau,yr_int=1,start_yr=0){
+O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,theta0,Lambda0,tau,yr_int=1,start_yr=0,Hstart=F){
   if(yr_int>tau) warning("Warning: your yr_int>tau")
   if(sum((rho_t>1)|(rho_t<0))) {stop("Error: invalid rho_t.")}
   if(length(delta)!=length(enrl_t)||length(enrl_t)!=length(cho_time)||length(cho_time)!=length(xbeta)){
     stop("Error: invalid input data.")
   } else {N3=length(delta)}
-  
+
   start_day=trunc(start_yr*365)+1
   c1=(exp(theta1)-exp(theta0))/(theta1-theta0)-1
   sign_c1=sign(c1)
   abs_c1=abs(c1)
   c1_length=length(c1)
+  if(sum(Hstart)>0) restart=Hstart|restart  #Hstart has higher priority to restart all
   rho_t=matrix(rho_t)
   if(ncol(rho_t)==1){
     rho_t=matrix(replicate(c1_length,rho_t),ncol=c1_length)
   }
   ndays=trunc(tau*365)
-  time_list=0:ndays-start_day+1
+  time_list=0:(ndays-start_day+1)
   rho_nrow=nrow(rho_t)
   if(rho_nrow!=ndays-start_day+2){ #warning("Warning: improper length of rho_t")
     if(rho_nrow<ndays-start_day+2)
@@ -370,7 +375,7 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
       rho_t=rbind(rho_t,t(replicate(ndays-start_day+2-rho_nrow,rho_t[rho_nrow,])))
     }
     else{
-      rho_t=rho_t[1:ndays-start_day+2,]
+      rho_t=rho_t[1:(ndays-start_day+2),]
     }
   }
   #print(rho_t)
@@ -379,7 +384,7 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   for (i in 1:N3){
     if(cho_time[i]>=start_day){
       true_in=max(start_day,enrl_t[i]) 
-      for(j in 1:ndays-start_day+1){
+      for(j in 1:(ndays-start_day+1)){
         if(j>=cho_time[i]-start_day && delta[i]){
           O_t_pre[i,j]=1;
         }
@@ -400,17 +405,17 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   start_times=vector("list",c1_length)
   M_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1_length)
   for(k in 1:c1_length){
-    start_times[[k]][1]=0
     M_t_pre=sign_c1[k]*O_E_t-abs_c1[k]*E_t
     M_t_pre=c(0,M_t_pre)
     M_min=0
     cross[k]=0
-    for(t in 1:ndays-start_day+2){
+    start_t=1
+    for(t in 1:(ndays-start_day+2)){
       M_min=min(M_min,M_t_pre[t]);
       M_pt1=M_min-M_t_pre[t]+h[k];
       
-      if(restart[k]&&cross[k]>0)  {
-        M_pt2=-(M_t_pre[t]-M_t_pre[start_times[[k]][cross[k]+1]+1])+(1-rho_t[t,k])*h[k]
+      if((restart[k]&&cross[k]>0)||Hstart)  {
+        M_pt2=-(M_t_pre[t]-M_t_pre[start_t+1])+(1-rho_t[max(t-start_t+1,1),k])*h[k]
         M_restart[t,k]=min(M_pt1,M_pt2)
       }else{
         M_restart[t,k]=M_pt1;
@@ -421,11 +426,11 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
 
       if(restart[k]){
         cross[k]=cross[k]+1
-        start_times[[k]][cross[k]+1]=t-1
-        
+        start_times[[k]][cross[k]]=t-1
+        start_t=t
       } else if(!restart[k]&&cross[k]==0){
         cross[k]=1
-        start_times[[k]][2]=t-1
+        start_times[[k]][1]=t-1
       }
         
         if(restart[k]==T &&t<ndays-start_day+2){
@@ -439,7 +444,107 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
   return(list(M_restart=M_restart,O_E_t=O_E_t,time_list=time_list,start_times=start_times,cross=cross))
 }
 
+std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,theta0,Lambda0,tau,yr_int=1,start_yr=0,Hstart=F){
+  if(yr_int>tau) warning("Warning: your yr_int>tau")
+  if(sum((rho_t>1)|(rho_t<0))) {stop("Error: invalid rho_t.")}
+  if(length(delta)!=length(enrl_t)||length(enrl_t)!=length(cho_time)||length(cho_time)!=length(xbeta)){
+    stop("Error: invalid input data.")
+  } else {N3=length(delta)}
+  
+  L=h*abs(theta1-theta0)
+  start_day=trunc(start_yr*365)+1
+  c1=(exp(theta1)-exp(theta0))/(theta1-theta0)-1
+  sign_c1=sign(c1)
+  abs_c1=abs(c1)
+  c1_length=length(c1)
+  if(sum(Hstart)>0) restart=Hstart|restart  #Hstart has higher priority to restart all
+  rho_t=matrix(rho_t)
+  if(ncol(rho_t)==1){
+     rho_t=matrix(replicate(c1_length,rho_t),ncol=c1_length)
+  }
+  ndays=trunc(tau*365)
+  time_list=0:(ndays-start_day+1)
+  rho_nrow=nrow(rho_t)
+    if(rho_nrow!=ndays-start_day+2){ #warning("Warning: improper length of rho_t")
+      if(rho_nrow<ndays-start_day+2)
+      { 
+        rho_t=rbind(rho_t,t(replicate(ndays-start_day+2-rho_nrow,rho_t[rho_nrow,])))
+      }
+      else{
+        rho_t=rho_t[1:(ndays-start_day+2),]
+      }
+    }
+#print(rho_t)
+    O_t_pre=E_t_pre=matrix(0,nrow=N3,ncol=ndays-start_day+1)
+    for (i in 1:N3){
+      if(cho_time[i]>=start_day){
+        true_in=max(start_day,enrl_t[i]) 
+        for(j in 1:(ndays-start_day+1)){
+          if(j>=cho_time[i]-start_day && delta[i]){
+             O_t_pre[i,j]=1;
+          }
+          if(j>=cho_time[i]-start_day) {
+             E_t_pre[i,j]=Lambda0[cho_time[i]-true_in+1]*exp(xbeta[i])
+          } else if(j>=true_in-start_day && j<=cho_time[i]-start_day){
+            E_t_pre[i,j]=Lambda0[j-(true_in-start_day)+1]*exp(xbeta[i])
+          }
+        }
+          
+      }
+    }
+      
+    O_t=colSums(O_t_pre)
+    E_t=colSums(E_t_pre)
+    cross=NULL
+    start_times=vector("list",c1_length)
+    S_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1_length)
+    for(k in 1:c1_length){
+      R_t=(theta1[k]-theta0[k])*O_t-(exp(theta1[k])-exp(theta0[k]))*E_t
+      R_t=c(0,R_t)
+      R_min=0
+      cross[k]=0
+      start_t=1
+      for(t in 1:(ndays-start_day+2)){
+        R_min=min(R_min,R_t[t])
+        R_pt1=R_t[t]-R_min
+        if((restart[k]&&cross[k]>0)||Hstart)  {
+          R_pt2=R_t[t]-R_t[start_t+1]+L[k]*rho_t[t-start_t+1,k]
+          S_restart[t,k]=max(R_pt1,R_pt2)
+        }else{
+          S_restart[t,k]=R_pt1
+        }
+            
+        if(S_restart[t,k]>L[k]){
+              
+          if(restart[k]){
+            cross[k]=cross[k]+1
+            start_times[[k]][cross[k]]=t-1
+            start_t=t
+                
+          } else if(!restart[k]&&cross[k]==0){
+            cross[k]=1
+            start_times[[k]][1]=t-1
+          }
+              
+          if(restart[k]==T && t<ndays-start_day+2){
+             R_min=R_t[t+1]
+          }
+        }
+      }
+    }
+        
+      return(list(S_restart=S_restart,O_E_t=O_E_t,time_list=time_list,start_times=start_times,cross=cross))
+        
+}
 
+#plot the CUSUM curves in R ggplot2
+CUSUM_plot=function(O_E=T,out="pdf",...){ #out=pdf,png,jpg etc. 
+  if(O_E) function(O_E_t, M_t, theta1,theta0){
+    
+  }else function(){
+    
+  }
+}
 
 
 if(F){
@@ -448,16 +553,17 @@ options(max.print=1000000)
 
   theta1=c(log(2),-log(2))
   theta0=c(log(1),-log(1))
-  mu=log(2)
+  mu=log(1)
   start_yr=1
   yr_er=0.1
   tau=4.5
   h=c(6.463784009,5.602556288)
-  data=CUSUM_data_gen(mu,100,tau,yr_er)
+  #data=CUSUM_data_gen(mu,100,tau,yr_er)
+  data=CUSUM_data_gen(mu,100,tau,yr_er,change_yr=2,change_rate=log(0.5))
 #either scalor, two-length vector or long tables for input of rho_t
-  result=O_E_CUSUM_calc(h,0,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=0)
-  
-  
+  result1=O_E_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
+  result2=std_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
+    
 theta1=c(log(2),-log(2))
 theta0=c(log(1),-log(1))
 mu=log(2)
