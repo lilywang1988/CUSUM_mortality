@@ -536,7 +536,7 @@ std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,
 }
 
 #plot the CUSUM curves in R ggplot2
-CUSUM_plot=function(O_E=T,adjust=T,result){ 
+CUSUM_plot=function(result,O_E=T,adjust=T){ 
   require(ggplot2)
   require(reshape)
   if(O_E) {
@@ -547,7 +547,7 @@ CUSUM_plot=function(O_E=T,adjust=T,result){
      for(j in 1:c1_length) {
        cross_t<-c(cross_t,result$signal_times[[j]])
        indicator_x<-c(indicator_x,rep(names[j+1],result$signal.n[j]))
-       }
+      }
      cross_data<-data.frame(cross_t,indicator_x=factor(indicator_x))
      if(adjust==T)M_t_adj=result$M_restart%*%diag(theta1-theta0) else M_t_adj=result$M_restart
      M_t_preplot=(M_t_adj+as.matrix(replicate(c1_length,result$O_E_t)))
@@ -562,7 +562,26 @@ CUSUM_plot=function(O_E=T,adjust=T,result){
      result_plt
        
   }else{
-    c1_length=length(c1)
+    c1_length=length(theta1)
+    names=paste0("test",1:c1_length)
+    cross_t=indicator_x=NULL
+    for(j in 1:c1_length) {
+      cross_t<-c(cross_t,result$signal_times[[j]])
+      indicator_x<-c(indicator_x,rep(names[j],result$signal.n[j]))
+    }
+    cross_data<-data.frame(cross_t,variable=factor(indicator_x))
+    S_preplot=result$S_restart
+    colnames(S_preplot)<-paste0("test",1:c1_length)                               
+    S_data=data.frame(time_list=result$time_list,S_preplot)
+    S_plot=melt( S_data,id="time_list")
+    S_plot$variable=as.factor(S_plot$variable)
+    L_bar<-data.frame(variable=factor(names),result$L)
+    result_plt<-ggplot(data=S_plot,aes(x=time_list,y=value))+geom_line(size=0.3)+facet_wrap( ~ variable, ncol=2,scales="free",labeller = )+
+      ggtitle("CUSUM plots")+theme(plot.title = element_text(hjust = 0.5,size=15))+
+      geom_hline(data = L_bar, aes(yintercept = result.L,color=variable))+geom_vline(aes(xintercept=cross_t,color=variable),data=cross_data,linetype="dashed",size=0.5)+
+      scale_color_manual(name  ="",values=2:(c1_length+1),labels=paste0("HR: ",round(exp(theta1),digits=2)," vs ",round(exp(theta0),digits=2)))
+    result_plt
+    
   }
 }
 
@@ -583,7 +602,7 @@ options(max.print=1000000)
 #either scalor, two-length vector or long tables for input of rho_t
   result1=O_E_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
   result2=std_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
-    
+  CUSUM_plot(T,result1)
 theta1=c(log(2),-log(2))
 theta0=c(log(1),-log(1))
 mu=log(2)
