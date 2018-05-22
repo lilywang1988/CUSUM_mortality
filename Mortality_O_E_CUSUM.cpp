@@ -397,16 +397,15 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
       
     }
   }
-  
-  O_t=colSums(O_t_pre)
-  E_t=colSums(E_t_pre)
+
+  O_t=c(0,colSums(O_t_pre))
+  E_t=c(0,colSums(E_t_pre))
   O_E_t=O_t-E_t
   cross=NULL
   start_times=vector("list",c1_length)
   M_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1_length)
   for(k in 1:c1_length){
     M_t_pre=sign_c1[k]*O_E_t-abs_c1[k]*E_t
-    M_t_pre=c(0,M_t_pre)
     M_min=0
     cross[k]=0
     start_t=1
@@ -441,7 +440,7 @@ O_E_CUSUM_calc=function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,t
     }
   }
   
-  return(list(M_restart=M_restart,O_E_t=O_E_t,time_list=time_list,start_times=start_times,cross=cross))
+  return(list(M_restart=M_restart,O_E_t=O_E_t,time_list=time_list,signal_times=start_times,signal.n=cross,theta1=theta1,theta0=theta0,h=h))
 }
 
 std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,theta0,Lambda0,tau,yr_int=1,start_yr=0,Hstart=F){
@@ -493,14 +492,13 @@ std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,
       }
     }
       
-    O_t=colSums(O_t_pre)
-    E_t=colSums(E_t_pre)
+    O_t=c(0,colSums(O_t_pre))
+    E_t=c(0,colSums(E_t_pre))
     cross=NULL
     start_times=vector("list",c1_length)
     S_restart=matrix(0,nrow=ndays-start_day+2,ncol=c1_length)
     for(k in 1:c1_length){
       R_t=(theta1[k]-theta0[k])*O_t-(exp(theta1[k])-exp(theta0[k]))*E_t
-      R_t=c(0,R_t)
       R_min=0
       cross[k]=0
       start_t=1
@@ -533,16 +531,38 @@ std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,
       }
     }
         
-      return(list(S_restart=S_restart,O_E_t=O_E_t,time_list=time_list,start_times=start_times,cross=cross))
+      return(list(S_restart=S_restart,time_list=time_list,signal_times=start_times,signal.n=cross,theta1=theta1,theta0=theta0,L=L))
         
 }
 
 #plot the CUSUM curves in R ggplot2
-CUSUM_plot=function(O_E=T,out="pdf",...){ #out=pdf,png,jpg etc. 
-  if(O_E) function(O_E_t, M_t, theta1,theta0){
-    
-  }else function(){
-    
+CUSUM_plot=function(O_E=T,adjust=T,result){ 
+  require(ggplot2)
+  require(reshape)
+  if(O_E) {
+     c1_length=length(theta1)
+     names=c("O_E_t",paste0("test",1:c1_length))
+     cross_t<-NA
+     indicator_x=names[1]
+     for(j in 1:c1_length) {
+       cross_t<-c(cross_t,result$signal_times[[j]])
+       indicator_x<-c(indicator_x,rep(names[j+1],result$signal.n[j]))
+       }
+     cross_data<-data.frame(cross_t,indicator_x=factor(indicator_x))
+     if(adjust==T)M_t_adj=result$M_restart%*%diag(theta1-theta0) else M_t_adj=result$M_restart
+     M_t_preplot=(M_t_adj+as.matrix(replicate(c1_length,result$O_E_t)))
+     colnames(M_t_preplot)<-paste0("test",1:c1_length)                               
+     M_t_data=data.frame(time_list=result$time_list,O_E_t=result$O_E_t,M_t_preplot)
+     M_t_plot=melt( M_t_data,id="time_list")
+     M_t_plot$variable=as.factor(M_t_plot$variable)
+     result_plt<-ggplot(data=M_t_plot,aes(x=time_list,y=value,color=variable))+geom_line(size=0.3)+  scale_linetype_manual(values=c("solid",rep("dashed",c1_length)))+
+       xlab("time")+ylab("O-E")+theme_light()+
+       geom_vline(data=cross_data,aes(xintercept=cross_t,color=indicator_x),linetype="dashed",size=0.5)+xlim(c(0,length(result$time_list)*1.005))+theme(plot.title = element_text(hjust = 0.5,size=15))+
+       scale_color_manual(name  ="",values=1:(c1_length+1),labels=c("O-E",paste0("HR: ",round(exp(theta1),digits=2)," vs ",round(exp(theta0),digits=2))))+ggtitle("O-E CUSUM plot")
+     result_plt
+       
+  }else{
+    c1_length=length(c1)
   }
 }
 
