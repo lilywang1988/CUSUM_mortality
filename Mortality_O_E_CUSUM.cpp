@@ -20,7 +20,7 @@ NumericVector O_E_CUSUM_hval(int nloop,int yr_size,NumericVector theta1, Numeric
   time_list.push_front(0);
   for(int loop=1;loop<=nloop; loop++){
     Rcout<<loop<<std::endl;
-    srand (loop);
+    //srand (loop);
     NumericVector enrl_gp=rexp(size*2, yr_size);
     NumericVector enrl_t=cumsum(enrl_gp);
     enrl_t=floor(as<NumericVector>(enrl_t[enrl_t<tau])*365);
@@ -116,7 +116,7 @@ List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size
   NumericMatrix hit_count(rho_list.length(),c1.length()); 
   for(int loop=1;loop<=nloop; loop++){
     Rcout<<loop<<std::endl;
-    srand (loop);
+    //srand (loop);
     NumericVector enrl_gp=rexp(size*2, yr_size);
     NumericVector enrl_t=cumsum(enrl_gp);
     enrl_t=floor(as<NumericVector>(enrl_t[enrl_t<tau])*365);
@@ -233,7 +233,7 @@ List O_E_CUSUM_rho_t(int nloop,NumericVector h, NumericVector rho_t,int yr_size,
     NumericVector hit_count(c1.length()); 
     for(int loop=1;loop<=nloop; loop++){
       Rcout<<loop<<std::endl;
-      srand (loop);
+      //srand (loop);
       NumericVector enrl_gp=rexp(size*2, yr_size);
       NumericVector enrl_t=cumsum(enrl_gp);
       enrl_t=floor(as<NumericVector>(enrl_t[enrl_t<tau])*365);
@@ -318,6 +318,156 @@ NumericVector Quantile(NumericVector newvalues, NumericVector oldvalues,int sN){
     }
   }
   return(oldvalues);
+}
+
+
+// [[Rcpp::export]]
+// O_E_CUSUM_rho_vs_rho_t is for to compare the performance of rho and rho_t or time_dependent
+List O_E_CUSUM_rho_vs_rho_t(int nloop,NumericVector h, NumericVector rho_list,IntegerMatrix rho_t_matrix,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double p,double yr_int=1,double start_yr=0,double tauL=4.5){
+  if(yr_int>tau) warning("Warning: your yr_int>tau");
+  if(sum((rho_list>1)|(rho_list<0))!=0) {rho_list=abs(rho_list/max(rho_list));
+    warning("Rho_list has been corrected.");}//correct rho vavalues if invalid
+  if(rho_list.length()!=rho_t_matrix.nrow()) stop("Error: rho_list.length()!=rho_t_matrix.nrow(). ");
+  int size=trunc(yr_size*tau);
+  int start_day=trunc(start_yr*365)+1;
+  int hit_time;
+  
+  NumericVector c1=(exp(theta1)-exp(theta0))/(theta1-theta0)-1;
+  IntegerVector sign_c1=sign(c1);
+  NumericVector abs_c1=abs(c1);
+  
+  if(c1.length()!=rho_t_matrix.ncol()) stop("c1.length()!=rho_t_matrix.ncol()");
+  
+  double gamma_subject=-log(1-yr_er)/365;
+  int ndays=trunc(tau*365);
+  int ndaysL=trunc(tauL*365);
+  IntegerVector time_list=seq_len(ndays-start_day+1);
+  time_list.push_front(0);
+  NumericVector M_t_pre;
+  NumericVector M_t_pre2;
+  NumericVector M_t;
+  NumericVector M_t2;
+  NumericVector M_t_rho; 
+  NumericVector M_t_rho_t;
+  NumericMatrix hit_table(rho_list.length(),c1.length());
+  NumericMatrix hit_utility(rho_list.length(),c1.length());
+  NumericMatrix hit_total(rho_list.length(),c1.length());
+  NumericMatrix hit_count(rho_list.length(),c1.length()); 
+  NumericMatrix hit_t_table(rho_list.length(),c1.length());
+  NumericMatrix hit_t_utility(rho_list.length(),c1.length());
+  NumericMatrix hit_t_total(rho_list.length(),c1.length());
+  NumericMatrix hit_t_count(rho_list.length(),c1.length()); 
+  NumericVector ARL_rho;
+  NumericVector ARL_rho_t;
+  IntegerVector ARL_rho_index;
+  IntegerVector ARL_rho_t_index;
+  for(int loop=1;loop<=nloop; loop++){
+    Rcout<<loop<<std::endl;
+    //srand (loop);
+    NumericVector enrl_gp=rexp(size*2, yr_size);
+    NumericVector enrl_t=cumsum(enrl_gp);
+    enrl_t=floor(as<NumericVector>(enrl_t[enrl_t<tau])*365);
+    int N3=enrl_t.length();
+    //Rcout<<N3<<std::endl;
+    NumericVector pre_time=trunc(rexp(N3,(gamma_subject)*exp(mu)));
+    LogicalVector delta_list=((pre_time<=365*yr_int) & ((enrl_t+pre_time)<(tau*365)));
+    NumericVector time=trunc(pmin(pre_time,pmin(365*yr_int,tau*365-enrl_t)));
+    NumericVector cho_time=enrl_t+time;
+    NumericMatrix E_t_pre(N3,ndays-start_day+1);
+    NumericMatrix O_t_pre(N3,ndays-start_day+1);
+    for (int i=0;i<N3;i++){
+      if(cho_time[i]>=start_day){
+        //int true_fu=(start_day>enrl_t[i])?(time[i]-(start_day-enrl_t[i])):time[i];
+        int true_in=(start_day>enrl_t[i])?start_day:enrl_t[i];//enrl_t[i]
+        //int true_in=enrl_t[i];
+        for(int j=0;j<ndays-start_day+1;j++){
+          if(j>=cho_time[i]-start_day && delta_list[i]){
+            O_t_pre(i,j)=1;
+          }
+          if(j>=cho_time[i]-start_day) {
+            E_t_pre(i,j)=gamma_subject*(cho_time[i]-true_in);// start_day<=cho_time && enrl_time< cho_Time
+          } else if(j>=true_in-start_day && j<=cho_time[i]-start_day){
+            E_t_pre(i,j)=gamma_subject*(j-(true_in-start_day));
+          }
+        }
+        
+      }
+    }
+    NumericVector O_t(ndays-start_day+1);
+    NumericVector E_t (ndays-start_day+1);
+    NumericVector O_E_t (ndays-start_day+1);
+    for(int j=0; j<ndays-start_day+1; j++){
+      O_t[j]=sum(O_t_pre.column(j));
+      E_t[j]=sum(E_t_pre.column(j));
+    }
+    O_E_t=O_t-E_t;
+    O_E_t.push_front(0);
+    //print(O_t);
+    // print(E_t);
+    for(int k=0;k<c1.length();k++){
+      M_t_pre=sign_c1(k)*O_E_t-abs_c1(k)*E_t;
+      M_t_pre2 = NumericVector(cummin(M_t_pre));
+      M_t = M_t_pre2-M_t_pre+h(k);
+      for(int r=0;r<rho_list.length();r++){
+        
+        M_t2=(1-rho_list(r))*h(k)-M_t_pre;
+        M_t_rho=pmin(M_t,M_t2);
+        
+        M_t_rho_t= clone(M_t_rho);
+        int start=((rho_t_matrix(r,k)+1)<(ndays-start_day+1))?(rho_t_matrix(r,k)+1):(ndays-start_day+1);
+        for(int l=start;l<ndays-start_day+2;l++){
+          M_t_rho_t(l)=M_t(l);
+        }
+        
+        
+        
+        //Rcout<<"min(M_t_rho)="<<min(M_t_rho)<<' '<<"M_t_rho(0)="<<M_t_rho(0)<<" "<<"M_t(0)"<<M_t(0)<<" "<<"M_t_pre(0)"<<M_t_pre(0)<<" "<<"k="<<k<<"rho="<<rho_list(r)<<std::endl;
+        if(min(M_t_rho)<0){
+
+          // if(k==0) Rcout<<"yes"<< r<<std::endl;
+          hit_time=min(as<NumericVector>(time_list[M_t_rho<0]));
+          ARL_rho.push_back(hit_time);
+          ARL_rho_index.push_back(r);
+          //Rcout<<hit_time<<std::endl;
+          hit_table(r,k)+=hit_time;
+          hit_total(r,k)+=(hit_time<=ndays-start_day+1)?1.0:0.0;
+          hit_count(r,k)+=(hit_time<=ndaysL-start_day+1)?1.0:0.0;
+        }
+        if(min(M_t_rho_t)<0){
+          // if(k==0) Rcout<<"yes"<< r<<std::endl;
+          hit_time=min(as<NumericVector>(time_list[M_t_rho_t<0]));
+          ARL_rho_t.push_back(hit_time);
+          ARL_rho_t_index.push_back(r);
+          //Rcout<<hit_time<<std::endl;
+          hit_t_table(r,k)+=hit_time;
+          hit_t_total(r,k)+=(hit_time<=ndays-start_day+1)?1.0:0.0;
+          hit_t_count(r,k)+=(hit_time<=ndaysL-start_day+1)?1.0:0.0;
+        }
+        
+        
+        //print(time_list[M_t_rho.row(k)<0]);
+        // Rcout<<"hittime="<<hit_time<<"k="<<k<<"r="<<r<<std::endl;
+        
+        if(loop==nloop){
+          hit_table(r,k)/=hit_total(r,k);
+          hit_utility(r,k)=hit_total(r,k)/nloop;
+          hit_count(r,k)/=nloop;
+          hit_t_table(r,k)/=hit_t_total(r,k);
+          hit_t_utility(r,k)=hit_t_total(r,k)/nloop;
+          hit_t_count(r,k)/=nloop;          
+          
+          //print(hit_table);
+        }
+      }
+      
+    }
+    // Rcout<<h_temp<<std::endl;
+    // print(h_quantiles);
+  }
+  //print(h_quantiles);
+  return(List::create(_["hit_table"]=hit_table, _["hit_count"]=hit_count, _["hit_utility"]=hit_utility,
+                      _["hit_t_table"]=hit_t_table, _["hit_t_count"]=hit_t_count, _["hit_t_utility"]=hit_t_utility,
+                        _["ARL_rho"]=ARL_rho,_["ARL_rho_index"]=ARL_rho_index,_["ARL_rho_t"]=ARL_rho_t,_["ARL_rho_t_index"]=ARL_rho_t_index));
 }
 
 /*** R
@@ -556,11 +706,11 @@ CUSUM_plot=function(result,O_E=T,adjust=T){
      M_t_plot=melt( M_t_data,id="time_list")
      M_t_plot$variable=as.factor(M_t_plot$variable)
      result_plt<-ggplot(data=M_t_plot,aes(x=time_list,y=value,color=variable))+geom_line(size=0.3)+  scale_linetype_manual(values=c("solid",rep("dashed",c1_length)))+
-       xlab("time")+ylab("O-E")+theme_light()+
+       xlab("time")+ylab("O-E")+ 
        geom_vline(data=cross_data,aes(xintercept=cross_t,color=indicator_x),linetype="dashed",size=0.5)+xlim(c(0,length(result$time_list)*1.005))+theme(plot.title = element_text(hjust = 0.5,size=15))+
        scale_color_manual(name  ="",values=1:(c1_length+1),labels=c("O-E",paste0("HR: ",round(exp(theta1),digits=2)," vs ",round(exp(theta0),digits=2))))+ggtitle("O-E CUSUM plot")
      result_plt
-       
+       #+theme_light()
   }else{
     c1_length=length(theta1)
     names=paste0("test",1:c1_length)
@@ -602,7 +752,7 @@ options(max.print=1000000)
 #either scalor, two-length vector or long tables for input of rho_t
   result1=O_E_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
   result2=std_CUSUM_calc(h,0.5,c(T,T),data$delta_list, data$enrl_t, data$cho_time, data$xbeta,theta1,theta0,data$Lambda0,tau,yr_int=1,start_yr=1)
-  CUSUM_plot(T,result1)
+  CUSUM_plot(result2,F)
 theta1=c(log(2),-log(2))
 theta0=c(log(1),-log(1))
 mu=log(2)
@@ -631,6 +781,22 @@ mu=log(1)
   res4=O_E_CUSUM_rho_t(1000,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
   res5=O_E_CUSUM_rho_t(1000,h,c(rep(0.5,230),rep(0,tau*365)),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
   res6=O_E_CUSUM_rho_t(1000,h,0,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
+
+  theta1=c(log(2),-log(2))
+  theta0=c(log(1),-log(1))
+  mu=log(2)
+  start_yr=1
+  yr_er=0.1
+  tau=4.5
+  p=0.08
+  h=c(6.463784009,5.602556288)
+  res_rho_vs_rho_t<-O_E_CUSUM_rho_vs_rho_t(1000,h[1],seq(0,0.9,0.1),as.matrix(rep(224.658/2,10)),100,log(2),c(0),mu,10,0.1,0.08,1,1,4.5)
+  res_rho_vs_rho_t$hit_table
+  res_rho_vs_rho_t$hit_t_table
+  
+  res_rho_vs_rho_t$hit_count
+  res_rho_vs_rho_t$hit_t_count
 }
+
 
 */
