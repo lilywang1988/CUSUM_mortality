@@ -86,7 +86,7 @@ NumericVector O_E_CUSUM_hval(int nloop,int yr_size,NumericVector theta1, Numeric
 }
 // [[Rcpp::export]]
 // O_E_CUSUM_rho is for performance check on different rho values: ARL and percent of hits
-List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double p,double yr_int=1,double start_yr=0,double tauL=4.5){
+List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
   if(yr_int>tau) warning("Warning: your yr_int>tau");
   if(sum((rho_list>1)|(rho_list<0))!=0) {rho_list=abs(rho_list/max(rho_list));
                                 warning("Rho_list has been corrected.");}//correct rho vavalues if invalid
@@ -196,7 +196,7 @@ List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size
 }
 // [[Rcpp::export]]
 // O_E_CUSUM_rho_t is for is for some spefic rho_t/rho simulations. 
-List O_E_CUSUM_rho_t(int nloop,NumericVector h, NumericVector rho_t,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double p,double yr_int=1,double start_yr=0,double tauL=4.5){
+List O_E_CUSUM_rho_t(int nloop,NumericVector h, NumericVector rho_t,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
     if(yr_int>tau) warning("Warning: your yr_int>tau");
     if(sum((rho_t>1)|(rho_t<0))) {stop("Error: invalid rho_t.");}
     int size=trunc(yr_size*tau);
@@ -323,7 +323,7 @@ NumericVector Quantile(NumericVector newvalues, NumericVector oldvalues,int sN){
 
 // [[Rcpp::export]]
 // O_E_CUSUM_rho_vs_rho_t is for to compare the performance of rho and rho_t or time_dependent
-List O_E_CUSUM_rho_vs_rho_t(int nloop,NumericVector h, NumericVector rho_list,IntegerMatrix rho_t_matrix,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double p,double yr_int=1,double start_yr=0,double tauL=4.5){
+List O_E_CUSUM_rho_vs_rho_t(int nloop,NumericVector h, NumericVector rho_list,IntegerMatrix rho_t_matrix,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
   if(yr_int>tau) warning("Warning: your yr_int>tau");
   if(sum((rho_list>1)|(rho_list<0))!=0) {rho_list=abs(rho_list/max(rho_list));
     warning("Rho_list has been corrected.");}//correct rho vavalues if invalid
@@ -778,19 +778,19 @@ O_E_CUSUM_hval(1000,100,theta1,theta0,mu,tau,yr_er,p,1,start_yr)
 h=c(6.463784009,5.602556288)
 #h=c(6.463784009)
 #mu=log(2)
-O_E_CUSUM_rho(1000,h,seq(0,1,0.1),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
-O_E_CUSUM_rho(100,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
+O_E_CUSUM_rho(1000,h,seq(0,1,0.1),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
+O_E_CUSUM_rho(100,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
   ARL=2
   rho1_days=trunc(ARL*365)
   rho2_days=trunc(tau*365)
 mu=log(2)
-  res1=O_E_CUSUM_rho_t(1000,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
-  res2=O_E_CUSUM_rho_t(1000,h,c(rep(0.5,230),rep(0,tau*365)),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
-  res3=O_E_CUSUM_rho_t(1000,h,0,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
+  res1=O_E_CUSUM_rho_t(1000,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
+  res2=O_E_CUSUM_rho_t(1000,h,c(rep(0.5,230),rep(0,tau*365)),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
+  res3=O_E_CUSUM_rho_t(1000,h,0,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
 mu=log(1)
-  res4=O_E_CUSUM_rho_t(1000,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
-  res5=O_E_CUSUM_rho_t(1000,h,c(rep(0.5,230),rep(0,tau*365)),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
-  res6=O_E_CUSUM_rho_t(1000,h,0,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,0.08,1,1,4.5)
+  res4=O_E_CUSUM_rho_t(1000,h,0.5,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
+  res5=O_E_CUSUM_rho_t(1000,h,c(rep(0.5,230),rep(0,tau*365)),100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
+  res6=O_E_CUSUM_rho_t(1000,h,0,100,c(log(2),-log(2)),c(0,0),mu,10,0.1,1,1,4.5)
 
   theta1=c(log(2),-log(2))
   theta0=c(log(1),-log(1))
@@ -800,7 +800,7 @@ mu=log(1)
   tau=4.5
   p=0.08
   h=c(6.463784009,5.602556288)
-  res_rho_vs_rho_t<-O_E_CUSUM_rho_vs_rho_t(1000,h[1],seq(0,0.9,0.1),as.matrix(rep(224.658/2,10)),100,log(2),c(0),mu,10,0.1,0.08,1,1,4.5)
+  res_rho_vs_rho_t<-O_E_CUSUM_rho_vs_rho_t(1000,h[1],seq(0,0.9,0.1),as.matrix(rep(224.658/2,10)),100,log(2),c(0),mu,10,0.1,1,1,4.5)
   res_rho_vs_rho_t$hit_table
   res_rho_vs_rho_t$hit_t_table
   
