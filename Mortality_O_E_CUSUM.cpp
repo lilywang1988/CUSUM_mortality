@@ -487,7 +487,7 @@ CUSUM_data_gen=function(mu,yr_size,tau,yr_er,yr_int=1,start_yr=1,seed=1,beta=0,c
   pre_time=trunc(rexp(N3,(gamma_subject)*exp(mu)))
   if(change_yr!=F){
     ind_change <- which((pre_time+enrl_t)>(change_yr*365))
-    pre_time[ind_change]<- ceiling((pre_time+enrl_t-(change_yr*365))[ind_change]*exp(mu)/exp(change_rate)+round(change_yr*365)-enrl_t[ind_change])
+    pre_time[ind_change]<- ceiling((pre_time[ind_change]+enrl_t[ind_change]-pmax(change_yr*365,enrl_t)[ind_change])*exp(mu)/exp(change_rate)+pmax(change_yr*365,enrl_t)[ind_change]-enrl_t[ind_change])
   }
   delta_list=((pre_time<=365*yr_int) & ((enrl_t+pre_time)<(tau*365)))
   time=trunc(pmin(pre_time,pmin(365*yr_int,tau*365-enrl_t)));
@@ -689,17 +689,28 @@ std_CUSUM_calc<-function(h, rho_t,restart,delta, enrl_t, cho_time, xbeta,theta1,
 CUSUM_plot=function(result,O_E=T,adjust=T){ 
   require(ggplot2)
   require(reshape)
+  theta1=result$theta1
+  theta0=result$theta0
+  c1_length=length(theta1)
+  name_temp1=round(exp(theta1),digits=2)
+  name_temp0=round(exp(theta0),digits=2)
+  sign0=sign1=rep("",c1_length)
+  for(d in 1:c1_length){
+    if(name_temp1[d]<1)  {name_temp1[d]=round(1/name_temp1[d],2); sign1[d]="-"}
+    if(name_temp0[d]<1)  {name_temp0[d]=round(1/name_temp0[d],2); sign0[d]="-"}
+  }
+  legend_names<-paste0(sign0,"log",name_temp0," vs ", sign1,"log",name_temp1)
+  legend_title<-"H0 vs H1: "
   if(O_E) {
-     c1_length=length(theta1)
      names=c("O_E_t",paste0("test",1:c1_length))
-     cross_t<-NA
+     cross_t<--1000
      indicator_x=names[1]
      for(j in 1:c1_length) {
        cross_t<-c(cross_t,result$signal_times[[j]])
        indicator_x<-c(indicator_x,rep(names[j+1],result$signal.n[j]))
       }
      cross_data<-data.frame(cross_t,indicator_x=factor(indicator_x))
-     if(adjust==T)M_t_adj=result$M_restart%*%diag(theta1-theta0) else M_t_adj=result$M_restart
+     if(adjust==T)M_t_adj=result$M_restart%*%diag(theta1-theta0) else M_t_adj=(result$M_restart)%*%diag(sign(theta1))
      M_t_preplot=(M_t_adj+as.matrix(replicate(c1_length,result$O_E_t)))
      colnames(M_t_preplot)<-paste0("test",1:c1_length)                               
      M_t_data=data.frame(time_list=result$time_list,O_E_t=result$O_E_t,M_t_preplot)
@@ -707,12 +718,11 @@ CUSUM_plot=function(result,O_E=T,adjust=T){
      M_t_plot$variable=as.factor(M_t_plot$variable)
      result_plt<-ggplot(data=M_t_plot,aes(x=time_list,y=value,color=variable))+geom_line(size=0.3)+  scale_linetype_manual(values=c("solid",rep("dashed",c1_length)))+
        xlab("time")+ylab("O-E")+ 
-       geom_vline(data=cross_data,aes(xintercept=cross_t,color=indicator_x),linetype="dashed",size=0.5)+xlim(c(0,length(result$time_list)*1.005))+theme(plot.title = element_text(hjust = 0.5,size=15))+
-       scale_color_manual(name  ="",values=1:(c1_length+1),labels=c("O-E",paste0("HR: ",round(exp(theta1),digits=2)," vs ",round(exp(theta0),digits=2))))+ggtitle("O-E CUSUM plot")
+       geom_vline(data=cross_data,aes(xintercept=cross_t,color=indicator_x),linetype="dashed",size=0.5)+xlim(c(0,length(result$time_list)*1.005))+theme_light()+theme(plot.title = element_text(hjust = 0.5,size=15))+
+       scale_color_manual(name  =legend_title,values=1:(c1_length+1),labels=c("O-E",  legend_names))+ggtitle("O-E CUSUM")
      result_plt
        #+theme_light()
   }else{
-    c1_length=length(theta1)
     names=paste0("test",1:c1_length)
     cross_t=indicator_x=NULL
     for(j in 1:c1_length) {
@@ -727,9 +737,9 @@ CUSUM_plot=function(result,O_E=T,adjust=T){
     S_plot$variable=as.factor(S_plot$variable)
     L_bar<-data.frame(variable=factor(names),result$L)
     result_plt<-ggplot(data=S_plot,aes(x=time_list,y=value))+geom_line(size=0.3)+facet_wrap( ~ variable, ncol=2,scales="free",labeller = )+
-      ggtitle("CUSUM plots")+theme(plot.title = element_text(hjust = 0.5,size=15))+
+      ggtitle("Standard CUSUM")+theme_bw()+theme(plot.title = element_text(hjust = 0.5,size=15))+
       geom_hline(data = L_bar, aes(yintercept = result.L,color=variable))+geom_vline(aes(xintercept=cross_t,color=variable),data=cross_data,linetype="dashed",size=0.5)+
-      scale_color_manual(name  ="",values=2:(c1_length+1),labels=paste0("HR: ",round(exp(theta1),digits=2)," vs ",round(exp(theta0),digits=2)))
+      scale_color_manual(name  = legend_title,values=2:(c1_length+1),labels=  legend_names)
     result_plt
     
   }
