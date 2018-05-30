@@ -737,7 +737,7 @@ CUSUM_plot=function(result,O_E=T,adjust=T){
     S_plot$variable=as.factor(S_plot$variable)
     L_bar<-data.frame(variable=factor(names),result$L)
     result_plt<-ggplot(data=S_plot,aes(x=time_list,y=value))+geom_line(size=0.3)+facet_wrap( ~ variable, ncol=2,scales="free",labeller = )+
-      ggtitle("Standard CUSUM")+theme_bw()+theme(plot.title = element_text(hjust = 0.5,size=15))+
+      ggtitle("Standard CUSUM")+xlab("time")+ylab("One-sided CUSUM")+theme_bw()+theme(plot.title = element_text(hjust = 0.5,size=15))+
       geom_hline(data = L_bar, aes(yintercept = result.L,color=variable))+geom_vline(aes(xintercept=cross_t,color=variable),data=cross_data,linetype="dashed",size=0.5)+
       scale_color_manual(name  = legend_title,values=2:(c1_length+1),labels=  legend_names)
     result_plt
