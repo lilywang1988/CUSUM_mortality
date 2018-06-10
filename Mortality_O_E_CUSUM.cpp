@@ -4,7 +4,7 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 NumericVector O_E_CUSUM_hval(int nloop,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double p,double yr_int=1,double start_yr=0){
-  if(yr_int>tau) stop("Error: your yr_int>tau, this may be invalid!");
+  if(yr_int>tau) warning("Error: your yr_int>tau, this may be invalid!");
   int size=trunc(yr_size*tau);
   int start_day=trunc(start_yr*365)+1;
   NumericVector c1=(exp(theta1)-exp(theta0))/(theta1-theta0)-1;
@@ -84,8 +84,9 @@ NumericVector O_E_CUSUM_hval(int nloop,int yr_size,NumericVector theta1, Numeric
   return( h_quantiles.row(sN-1));
  // return(0);
 }
-// [[Rcpp::export]]
+
 // O_E_CUSUM_rho is for performance check on different rho values: ARL and percent of hits
+// [[Rcpp::export]]
 List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
   if(yr_int>tau) warning("Warning: your yr_int>tau");
   if(sum((rho_list>1)|(rho_list<0))!=0) {rho_list=abs(rho_list/max(rho_list));
@@ -194,8 +195,8 @@ List O_E_CUSUM_rho(int nloop,NumericVector h, NumericVector rho_list,int yr_size
   //print(h_quantiles);
   return(List::create(Named("hit_table")=hit_table, _["hit_count"]=hit_count, _["hit_utility"]=hit_utility));
 }
-// [[Rcpp::export]]
 // O_E_CUSUM_rho_t is for is for some spefic rho_t/rho simulations. 
+// [[Rcpp::export]]
 List O_E_CUSUM_rho_t(int nloop,NumericVector h, NumericVector rho_t,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
     if(yr_int>tau) warning("Warning: your yr_int>tau");
     if(sum((rho_t>1)|(rho_t<0))) {stop("Error: invalid rho_t.");}
@@ -307,8 +308,8 @@ List O_E_CUSUM_rho_t(int nloop,NumericVector h, NumericVector rho_t,int yr_size,
     return(List::create(Named("hit_table")=hit_table, _["hit_count"]=hit_count, _["hit_utility"]=hit_utility));
   }
 
-// [[Rcpp::export]]
 // The quantile function to keep the first interesting part of the data
+// [[Rcpp::export]]
 NumericVector Quantile(NumericVector newvalues, NumericVector oldvalues,int sN){
   if(sN!=oldvalues.length()) stop("Error: invalid number of oldvalues for input of the Quantile()");
   for(NumericVector::iterator value=newvalues.begin(); value!=newvalues.end(); value++){
@@ -320,9 +321,8 @@ NumericVector Quantile(NumericVector newvalues, NumericVector oldvalues,int sN){
   return(oldvalues);
 }
 
-
-// [[Rcpp::export]]
 // O_E_CUSUM_rho_vs_rho_t is for to compare the performance of rho and rho_t or time_dependent
+// [[Rcpp::export]]
 List O_E_CUSUM_rho_vs_rho_t(int nloop,NumericVector h, NumericVector rho_list,IntegerMatrix rho_t_matrix,int yr_size,NumericVector theta1, NumericVector theta0,double mu,double tau,double yr_er,double yr_int=1,double start_yr=0,double tauL=4.5){
   if(yr_int>tau) warning("Warning: your yr_int>tau");
   if(sum((rho_list>1)|(rho_list<0))!=0) {rho_list=abs(rho_list/max(rho_list));
